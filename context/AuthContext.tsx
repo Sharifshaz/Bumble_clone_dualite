@@ -48,33 +48,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (loading) return;
 
-    const inAuthGroup = segments[0] === '(tabs)' || segments[0] === 'onboarding';
+    const inAuthGroup = segments[0] === '(tabs)' || segments[0] === 'onboarding' || segments[0] === 'chat';
     const inPublicGroup = segments[0] === 'login' || segments[0] === 'phone-verify' || segments[0] === 'auth';
 
     if (!session && inAuthGroup) {
-      // Redirect to login if not authenticated
       router.replace('/login');
     } else if (session) {
-        // Check if user has a profile
         const checkProfile = async () => {
             try {
                 const { data, error } = await supabase
                     .from('profiles')
-                    .select('id')
+                    .select('id, onboarding_complete')
                     .eq('id', session.user.id)
                     .single();
                 
-                // If we are in a public group (like login/auth), we need to decide where to go
+                // FIX 2: Check onboarding_complete flag
                 if (inPublicGroup) {
-                    if (data) {
-                        // Profile exists -> Go to Tabs
+                    if (data?.onboarding_complete) {
                         router.replace('/(tabs)');
                     } else {
-                        // No profile -> Go to Onboarding
                         router.replace('/onboarding/name');
                     }
-                } else if (segments[0] === 'onboarding' && data) {
-                    // If user is in onboarding but HAS a profile, send them to tabs
+                } else if (segments[0] === 'onboarding' && data?.onboarding_complete && segments[1] !== 'complete') {
                     router.replace('/(tabs)');
                 }
             } catch (e) {

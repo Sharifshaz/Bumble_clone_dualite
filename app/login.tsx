@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { BumbleButton } from '../components/BumbleButton';
 import { useRouter } from 'expo-router';
-import { Hexagon, Apple, Facebook, Smartphone, Mail } from 'lucide-react-native';
+import { Hexagon, Smartphone, Mail } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_900Black',
     fontSize: 40,
     textAlign: 'center',
-    color: Colors.primary,
+    color: '#FFFFFF', // FIX 6: Changed to pure white
     textShadowColor: 'black',
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 1,

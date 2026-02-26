@@ -27,7 +27,6 @@ export default function MainScreen() {
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // Animation Values
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const rotate = useSharedValue(0);
@@ -40,16 +39,15 @@ export default function MainScreen() {
     if (!user) return;
     setLoading(true);
     
-    // Get IDs of users already swiped
     const { data: swipes } = await supabase
         .from('swipes')
         .select('target_id')
         .eq('liker_id', user.id);
 
     const swipedIds = swipes?.map(s => s.target_id) || [];
-    swipedIds.push(user.id); // Don't show self
+    swipedIds.push(user.id);
 
-    // Fetch profiles not in swipedIds
+    // FIX 1: Fetch profiles including demo users
     const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -57,17 +55,17 @@ export default function MainScreen() {
         .limit(20);
 
     if (data) {
-        // Transform data to match UI expectations
         const formatted = data.map(p => ({
             id: p.id,
             name: p.first_name,
-            age: new Date().getFullYear() - new Date(p.birth_date).getFullYear(),
-            distance: Math.floor(Math.random() * 20) + 1, // Mock distance for now
+            age: p.birth_date ? new Date().getFullYear() - new Date(p.birth_date).getFullYear() : 25,
+            distance: Math.floor(Math.random() * 20) + 1,
             bio: p.bio,
             images: p.photos || [],
-            job: p.job,
-            verified: true,
-            interests: p.interests || []
+            job: p.job || 'Professional',
+            verified: p.is_demo || false,
+            interests: p.interests || [],
+            is_demo: p.is_demo
         }));
         setProfiles(formatted);
     }
@@ -78,7 +76,6 @@ export default function MainScreen() {
     const profile = profiles[currentIndex];
     if (!profile || !user) return;
 
-    // Record Swipe
     const action = direction === 'right' ? 'like' : 'pass';
     await supabase.from('swipes').insert({
         liker_id: user.id,
@@ -87,17 +84,8 @@ export default function MainScreen() {
     });
 
     if (action === 'like') {
-        // Check for match
-        const { data: theirSwipe } = await supabase
-            .from('swipes')
-            .select('*')
-            .eq('liker_id', profile.id)
-            .eq('target_id', user.id)
-            .eq('action', 'like')
-            .single();
-
-        if (theirSwipe) {
-            // It's a match!
+        // FIX 1: Auto-match if it's a demo user
+        if (profile.is_demo) {
             await supabase.from('matches').insert({
                 user1_id: user.id,
                 user2_id: profile.id
@@ -105,6 +93,24 @@ export default function MainScreen() {
             setTimeout(() => {
                 router.push({ pathname: '/match', params: { matchId: profile.id, name: profile.name, photo: profile.images[0] } });
             }, 300);
+        } else {
+            const { data: theirSwipe } = await supabase
+                .from('swipes')
+                .select('*')
+                .eq('liker_id', profile.id)
+                .eq('target_id', user.id)
+                .eq('action', 'like')
+                .single();
+
+            if (theirSwipe) {
+                await supabase.from('matches').insert({
+                    user1_id: user.id,
+                    user2_id: profile.id
+                });
+                setTimeout(() => {
+                    router.push({ pathname: '/match', params: { matchId: profile.id, name: profile.name, photo: profile.images[0] } });
+                }, 300);
+            }
         }
     }
 
@@ -177,7 +183,6 @@ export default function MainScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Bar */}
       <View style={styles.header}>
         <Text style={styles.logo}>bumble</Text>
         <View style={styles.headerIcons}>
@@ -191,19 +196,16 @@ export default function MainScreen() {
       </View>
 
       <View style={styles.cardsContainer}>
-        {/* Next Card (Background) */}
         {nextProfile && (
           <View style={[styles.cardWrapper, styles.nextCard]}>
             <SwipeableCard profile={nextProfile} />
           </View>
         )}
 
-        {/* Current Card (Foreground) */}
         <GestureDetector gesture={panGesture}>
           <Animated.View style={[styles.cardWrapper, cardStyle]}>
             <SwipeableCard profile={currentProfile} />
             
-            {/* Overlay Indicators */}
             <Animated.View style={[styles.overlay, styles.likeOverlay, likeOpacity]}>
               <View style={[styles.overlayCircle, { borderColor: '#4CAF50' }]}>
                  <Heart size={40} color="#4CAF50" fill="#4CAF50" />
@@ -219,7 +221,6 @@ export default function MainScreen() {
         </GestureDetector>
       </View>
 
-      {/* Action Buttons */}
       <View style={styles.actionButtonsContainer}>
         <TouchableOpacity style={[styles.actionButton, styles.smallButton]} onPress={() => {}}>
            <RotateCcw size={24} color="#FBC02D" />
@@ -250,137 +251,25 @@ export default function MainScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.primary, // Yellow background
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 10,
-  },
-  logo: {
-    fontFamily: 'Inter_900Black',
-    fontSize: 28,
-    color: Colors.text,
-    letterSpacing: -1,
-  },
-  headerIcons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardsContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    zIndex: 1,
-  },
-  cardWrapper: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextCard: {
-    transform: [{ scale: 0.95 }, { translateY: 10 }],
-    opacity: 0.8,
-    zIndex: -1,
-  },
-  overlay: {
-    position: 'absolute',
-    top: 40,
-    zIndex: 100,
-  },
-  likeOverlay: {
-    left: 40,
-    transform: [{ rotate: '-30deg' }],
-  },
-  nopeOverlay: {
-    right: 40,
-    transform: [{ rotate: '30deg' }],
-  },
-  overlayCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'white',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    alignItems: 'center',
-    paddingBottom: 20,
-    paddingHorizontal: 10,
-    zIndex: 2,
-  },
-  actionButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'white',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  smallButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  nopeButton: {
-    borderWidth: 1,
-    borderColor: '#FFEBEE',
-  },
-  likeButton: {
-    borderWidth: 1,
-    borderColor: '#E8F5E9',
-  },
-  superLikeButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 1,
-    borderColor: '#E3F2FD',
-  },
-  emptyText: {
-    fontSize: 18,
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.text,
-    marginTop: 200,
-    textAlign: 'center',
-  },
-  resetButton: {
-    marginTop: 20,
-    backgroundColor: 'white',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    alignSelf: 'center',
-  },
-  resetText: {
-    fontFamily: 'Inter_600SemiBold',
-  },
+  container: { flex: 1, backgroundColor: Colors.primary },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 10 },
+  logo: { fontFamily: 'Inter_900Black', fontSize: 28, color: Colors.text, letterSpacing: -1 },
+  headerIcons: { flexDirection: 'row', gap: 12 },
+  iconButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
+  cardsContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 10, zIndex: 1 },
+  cardWrapper: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  nextCard: { transform: [{ scale: 0.95 }, { translateY: 10 }], opacity: 0.8, zIndex: -1 },
+  overlay: { position: 'absolute', top: 40, zIndex: 100 },
+  likeOverlay: { left: 40, transform: [{ rotate: '-30deg' }] },
+  nopeOverlay: { right: 40, transform: [{ rotate: '30deg' }] },
+  overlayCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', borderWidth: 4, elevation: 5 },
+  actionButtonsContainer: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', paddingBottom: 20, paddingHorizontal: 10, zIndex: 2 },
+  actionButton: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'white', alignItems: 'center', justifyContent: 'center', elevation: 3 },
+  smallButton: { width: 44, height: 44, borderRadius: 22 },
+  nopeButton: { borderWidth: 1, borderColor: '#FFEBEE' },
+  likeButton: { borderWidth: 1, borderColor: '#E8F5E9' },
+  superLikeButton: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, borderColor: '#E3F2FD' },
+  emptyText: { fontSize: 18, fontFamily: 'Inter_600SemiBold', color: Colors.text, marginTop: 200, textAlign: 'center' },
+  resetButton: { marginTop: 20, backgroundColor: 'white', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, alignSelf: 'center' },
+  resetText: { fontFamily: 'Inter_600SemiBold' },
 });

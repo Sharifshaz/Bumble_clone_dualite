@@ -35,7 +35,7 @@ export default function EmailAuthScreen() {
             setErrorMsg('Success! Please check your email for a confirmation link.');
             Alert.alert('Check your email', 'Please check your email for a confirmation link.');
         } else {
-            // Auto-login successful
+            // Auto-login successful, AuthContext will handle redirect
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -45,7 +45,7 @@ export default function EmailAuthScreen() {
         if (error) throw error;
       }
     } catch (error: any) {
-      console.error("Auth Error:", error);
+      console.log("Auth Error:", error.message);
       if (error.message === 'Email not confirmed') {
         setErrorMsg('Please verify your email address before signing in.');
       } else {
